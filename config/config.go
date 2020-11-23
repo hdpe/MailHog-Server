@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"strings"
 
 	"github.com/ian-kent/envconf"
 	"github.com/mailhog/MailHog-Server/monkey"
@@ -43,6 +44,7 @@ type Config struct {
 	StorageLimit     int
 	CORSOrigin       string
 	MaildirPath      string
+	AllowedSenders   string
 	InviteJim        bool
 	Storage          storage.Storage
 	MessageChan      chan *data.Message
@@ -51,6 +53,7 @@ type Config struct {
 	OutgoingSMTPFile string
 	OutgoingSMTP     map[string]*OutgoingSMTP
 	WebPath          string
+	Constraints      Constraints
 }
 
 // OutgoingSMTP is an outgoing SMTP server config
@@ -101,6 +104,12 @@ func Configure() *Config {
 		cfg.Monkey = Jim
 	}
 
+	if cfg.AllowedSenders != "" {
+		cfg.Constraints = StaticConstraints{
+			AllowedSenders: strings.Split(cfg.AllowedSenders, ","),
+		}
+	}
+
 	if len(cfg.OutgoingSMTPFile) > 0 {
 		b, err := ioutil.ReadFile(cfg.OutgoingSMTPFile)
 		if err != nil {
@@ -129,6 +138,7 @@ func RegisterFlags() {
 	flag.StringVar(&cfg.MongoColl, "mongo-coll", envconf.FromEnvP("MH_MONGO_COLLECTION", "messages").(string), "MongoDB collection, e.g. messages")
 	flag.StringVar(&cfg.CORSOrigin, "cors-origin", envconf.FromEnvP("MH_CORS_ORIGIN", "").(string), "CORS Access-Control-Allow-Origin header for API endpoints")
 	flag.StringVar(&cfg.MaildirPath, "maildir-path", envconf.FromEnvP("MH_MAILDIR_PATH", "").(string), "Maildir path (if storage type is 'maildir')")
+	flag.StringVar(&cfg.AllowedSenders, "allowed-senders", envconf.FromEnvP("MH_ALLOWED_SENDERS", "").(string), "Allowed sender addresses or blank for any (default)")
 	flag.BoolVar(&cfg.InviteJim, "invite-jim", envconf.FromEnvP("MH_INVITE_JIM", false).(bool), "Decide whether to invite Jim (beware, he causes trouble)")
 	flag.StringVar(&cfg.OutgoingSMTPFile, "outgoing-smtp", envconf.FromEnvP("MH_OUTGOING_SMTP", "").(string), "JSON file containing outgoing SMTP servers")
 	Jim.RegisterFlags()

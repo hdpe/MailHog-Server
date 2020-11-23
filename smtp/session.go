@@ -3,6 +3,7 @@ package smtp
 // http://www.rfc-editor.org/rfc/rfc5321.txt
 
 import (
+	"github.com/mailhog/MailHog-Server/config"
 	"io"
 	"log"
 	"strings"
@@ -25,13 +26,14 @@ type Session struct {
 	line          string
 	link          *linkio.Link
 
-	reader io.Reader
-	writer io.Writer
-	monkey monkey.ChaosMonkey
+	reader      io.Reader
+	writer      io.Writer
+	monkey      monkey.ChaosMonkey
+	constraints config.Constraints
 }
 
 // Accept starts a new SMTP session using io.ReadWriteCloser
-func Accept(remoteAddress string, conn io.ReadWriteCloser, storage storage.Storage, messageChan chan *data.Message, hostname string, monkey monkey.ChaosMonkey) {
+func Accept(remoteAddress string, conn io.ReadWriteCloser, storage storage.Storage, messageChan chan *data.Message, hostname string, monkey monkey.ChaosMonkey, constraints config.Constraints) {
 	defer conn.Close()
 
 	proto := smtp.NewProtocol()
@@ -48,7 +50,7 @@ func Accept(remoteAddress string, conn io.ReadWriteCloser, storage storage.Stora
 		}
 	}
 
-	session := &Session{conn, proto, storage, messageChan, remoteAddress, false, "", link, reader, writer, monkey}
+	session := &Session{conn, proto, storage, messageChan, remoteAddress, false, "", link, reader, writer, monkey, constraints}
 	proto.LogHandler = session.logf
 	proto.MessageReceivedHandler = session.acceptMessage
 	proto.ValidateSenderHandler = session.validateSender
@@ -89,6 +91,12 @@ func (c *Session) validateRecipient(to string) bool {
 }
 
 func (c *Session) validateSender(from string) bool {
+	if c.constraints != nil {
+		ok := c.constraints.AllowsSender(from)
+		if !ok {
+			return false
+		}
+	}
 	if c.monkey != nil {
 		ok := c.monkey.ValidMAIL(from)
 		if !ok {
